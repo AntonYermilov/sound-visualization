@@ -1,6 +1,6 @@
-from audio.dataset import DEAMDataset
+from audio.dataset import DEAMSpectrogramDataset
 
 
 if __name__ == '__main__':
-    dataset = DEAMDataset()
+    dataset = DEAMSpectrogramDataset()
     dataset.load()
