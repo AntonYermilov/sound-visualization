@@ -6,3 +6,5 @@ resampy
 librosa
 sklearn
 ipykernel
+ipywidgets
+tqdm

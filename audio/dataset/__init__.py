@@ -1,1 +1,2 @@
-from .deamdataset import DEAMDataset
+from .deam import DEAMSpectrogramDataset
+from .deam import DEAMSequenceDataset

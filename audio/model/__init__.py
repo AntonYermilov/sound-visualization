@@ -1,1 +1,2 @@
-from .cnn import AudioCNN
+from .cnn import AudioCNNEncoder
+from .lstm import AudioLSTMEncoder
