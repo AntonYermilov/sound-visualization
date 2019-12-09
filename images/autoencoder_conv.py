@@ -6,7 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
+from enum import Enum
 
+class EncoderState(Enum):
+    TRAIN = 1
+    EVAL = 2
+    PREDICT = 3
+   
 class Flatten(nn.Module):
     def forward(self, x: torch.Tensor):
         return x.flatten(start_dim=1)
@@ -23,6 +29,7 @@ class ConvAutoencoder(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_class = num_class
+        self.state = EncoderState.TRAIN
 
         self.encoder = nn.Sequential(
             nn.Conv2d(1, self.hidden_size // 2, kernel_size=3, stride=2, padding=1),
@@ -53,18 +60,29 @@ class ConvAutoencoder(nn.Module):
         )
 
     def forward(self, x):
-        z = self.encoder(x)
+        # x is image
+        if self.state == EncoderState.TRAIN:
+            z = self.encoder(x)
 
-        logits = self.classifier(z)
-        reconstruction = self.decode(z)
+            logits = self.classifier(z)
+            reconstruction = torch.sigmoid(self.decoder(z))
 
-        return logits, reconstruction
+            return logits, reconstruction
+        # x is image code
+        elif self.state == EncoderState.EVAL:
+            return torch.sigmoid(self.decoder(x))
+        # x is image code
+        else:
+            self.classifier(x)
 
-    def encode(self, x):
-        return self.encoder(x)
+    def __call__(self, x):
+        return self.forward(x)
 
-    def decode(self, z):
-        return torch.sigmoid(self.decoder(z))
+    def set_train(self):
+        self.state = EncoderState.TRAIN
 
-    def classify(self, z):
-        return self.classifier(z)
+    def set_eval(self):
+        self.state = EncoderState.EVAL
+
+    def set_predict(self):
+        self.state = EncoderState.PREDICT
