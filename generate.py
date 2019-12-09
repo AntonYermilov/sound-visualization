@@ -1,73 +1,56 @@
 import librosa
+import numpy as np
 import argparse
 import torch
 import warnings
-import os
-import cv2
-import moviepy.editor as mpe
+from pathlib import Path
 
-SAMPLE_RATE = 20480
+from audio.model import AudioLSTMEncoder
+from image.model.autoencoder import ConvAutoencoder
+from util.video_util import make_video
+
+
 N_MFCC = 40
+DURATION_SEC = 4
+SAMPLE_RATE = 20480
 FRAMES_PER_SEC = 40
-SAMPLE_DURATION = 4
 HOP_LENGTH = SAMPLE_RATE // FRAMES_PER_SEC
-FRAMES_IN_DURATION = SAMPLE_DURATION * FRAMES_PER_SEC
+TOTAL_FRAMES = DURATION_SEC * FRAMES_PER_SEC
 
-IMAGES_PATH = 'images'
 
-def split_to_samples(audio_path):
-    samples = []
-
+def split_to_samples(audio_path: Path) -> torch.Tensor:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        audio, sample_rate = librosa.core.load(audio_path, sr=SAMPLE_RATE, res_type='kaiser_fast')
+        audio, sample_rate = librosa.core.load(str(audio_path), sr=SAMPLE_RATE, res_type='kaiser_fast')
         audio = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=N_MFCC, hop_length=HOP_LENGTH)
 
-    total_num_frames = audio.shape[1]
-    num_samples = total_num_frames - FRAMES_IN_DURATION + 1
+    frames_num = audio.shape[1]
+    audio = np.pad(audio, ((0, 0), (TOTAL_FRAMES - 1, 0)), 'constant', constant_values=0)
 
-    for i in range(num_samples):
-        samples.append(torch.tensor(audio[:, i:i+FRAMES_IN_DURATION], dtype=torch.float64))
+    samples = torch.tensor([audio[:, i:i+TOTAL_FRAMES] for i in range(frames_num)], dtype=torch.float32)
+    return samples.view(frames_num, 1, N_MFCC, TOTAL_FRAMES)
 
-    return torch.stack(samples)
 
-def create_video(video_path):
-    images_dir = os.fsencode(IMAGES_PATH)
-    images = [os.fsdecode(el) for el in os.listdir(images_dir)
-                        if os.fsdecode(el).endswith(".png")]
-    """os.fsdecode(el).isnumeric() and"""
-    #images.sort()
-    print(len(images))
+def main(audio_path: Path, video_path: Path):
+    samples = split_to_samples(audio_path)
 
-    frame = cv2.imread(os.path.join(IMAGES_PATH, images[0]))
-    height, width, layers = frame.shape
+    audio_model = AudioLSTMEncoder(n_mfcc=40, n_hidden=256, n_out=32)
+    audio_checkpoint = torch.load(Path('resources', 'models', 'lstm_encoder_cls.bin'), map_location=torch.device('cpu'))
+    audio_model.load_state_dict(audio_checkpoint['state_dict'])
 
-    video = cv2.VideoWriter(video_path, 0, 1, (width, height))
+    image_checkpoint = torch.load(Path('resources', 'models', 'conv_autoencoder.bin'), map_location=torch.device('cpu'))
+    image_model = ConvAutoencoder(hidden_size=32, num_class=10)
+    image_model.load_state_dict(image_checkpoint['state_dict'])
+    image_model.set_eval()
 
-    for image in images:
-        video.write(cv2.imread(os.path.join(IMAGES_PATH, image)))
+    audio_out = audio_model(samples)
+    image_out = image_model(audio_out)
+    make_video(image_out, video_path, fps=40, audio_file=audio_path)
 
-    cv2.destroyAllWindows()
-    video.release()
-
-def convert_to_mp4(video_path):
-    my_clip = mpe.VideoFileClip(video_path)
-    my_clip.write_videofile("video.mp4")
-
-def add_music_to_video(video_path, audio_path):
-    #TODO: ffmpeg -i video.mp4 -i audio.mp3 -c copy output.mkv
-    pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--audio_path', type=str, help='path to audio, which is used to generate video')
-    parser.add_argument('--video_path', type=str, help='path to video, which was generated')
+    parser.add_argument('--audio_path', type=str, help='path to audio')
+    parser.add_argument('--video_path', type=str, help='path to video')
     args = parser.parse_args()
-
-    samples = split_to_samples(args.audio_path)
-
-    #TODO: add video generation via model
-
-    create_video("video.avi")
-    convert_to_mp4("video.avi")
-    #add_music_to_video("video.mp4", args.audio_path)
+    main(Path(args.audio_path), Path(args.video_path))
