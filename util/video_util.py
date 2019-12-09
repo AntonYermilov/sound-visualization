@@ -22,6 +22,6 @@ def make_video(tensors: torch.Tensor, video_file: Path, fps: int = 40, audio_fil
 
     video_clip = concatenate_videoclips(clips, method="compose")
     if audio_file:
-        audio_clip = AudioFileClip(audio_file)
-        video_clip.set_audio(audio_clip)
-    video_clip.write_videofile(video_file, fps=fps)
+        audio_clip = AudioFileClip(str(audio_file))
+        video_clip = video_clip.set_audio(audio_clip)
+    video_clip.write_videofile(str(video_file), fps=fps)
