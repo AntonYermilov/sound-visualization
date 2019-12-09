@@ -22,7 +22,7 @@ class AudioLSTMEncoder(nn.Module):
             nn.BatchNorm1d(4),
             Flatten()
         )
-        self.lstm = nn.LSTM(input_size=4 * self.n_mfcc, hidden_size=self.n_hidden, num_layers=2, dropout=0.2)
+        self.lstm = nn.LSTM(input_size=4 * self.n_mfcc, hidden_size=self.n_hidden, num_layers=2, dropout=0.2, batch_first=True)
         self.out = nn.Sequential(
             nn.Linear(in_features=self.n_hidden, out_features=self.n_out),
             nn.Tanh()
@@ -30,13 +30,15 @@ class AudioLSTMEncoder(nn.Module):
 
     def forward(self, x):
         n, c, h, w = x.shape
-        x = x.transpose(2, 3).reshape(n, w, c, h)
+
+        x = x.transpose(2, 3).transpose(1, 2)
+        assert x.shape == (n, w, c, h)
 
         frames = x.reshape(n * w, c, h)
         frames = self.transform(frames)
 
-        frames = frames.view(n, w, -1).transpose(0, 1)
+        frames = frames.view(n, w, -1)
         lstm_out, _ = self.lstm(frames)
 
-        h = self.out(lstm_out[-1])
+        h = self.out(lstm_out[:, -1])
         return h
