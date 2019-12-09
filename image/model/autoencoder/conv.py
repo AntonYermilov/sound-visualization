@@ -1,28 +1,27 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import time
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torchvision
 from enum import Enum
+
 
 class EncoderState(Enum):
     TRAIN = 1
     EVAL = 2
     PREDICT = 3
-   
+
+
 class Flatten(nn.Module):
     def forward(self, x: torch.Tensor):
         return x.flatten(start_dim=1)
+
 
 class FlattenDecoder(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
+
     def forward(self, x: torch.Tensor):
         return x.view(-1, self.hidden_size, 7, 7)
+
 
 class ConvAutoencoder(nn.Module):
     def __init__(self, hidden_size, num_class):
@@ -60,20 +59,16 @@ class ConvAutoencoder(nn.Module):
         )
 
     def forward(self, x):
-        # x is image
-        if self.state == EncoderState.TRAIN:
-            z = self.encoder(x)
-
-            logits = self.classifier(z)
-            reconstruction = torch.sigmoid(self.decoder(z))
-
-            return logits, reconstruction
-        # x is image code
-        elif self.state == EncoderState.EVAL:
+        if self.state == EncoderState.EVAL:
             return torch.sigmoid(self.decoder(x))
-        # x is image code
-        else:
-            self.classifier(x)
+
+        if self.state == EncoderState.PREDICT:
+            return self.classifier(x)
+
+        z = self.encoder(x)
+        logits = self.classifier(z)
+        reconstruction = torch.sigmoid(self.decoder(z))
+        return logits, reconstruction
 
     def __call__(self, x):
         return self.forward(x)
