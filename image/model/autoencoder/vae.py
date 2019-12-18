@@ -53,14 +53,18 @@ class VAE(nn.Module):
             return self.classifier(x)
 
         mu, logvar = self.encode(x)
-        z = mu + torch.sqrt(logvar.exp()) * torch.randn(logvar.shape).to(self.device)
+        var = logvar.exp()
+
+        z = mu + torch.sqrt(var) * torch.randn(var.shape).to(self.device)
 
         logits = self.classifier(z)
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
+        reconstruction = self.decode(z).view_as(x)
 
-        reconstruction = self.decode(mu + eps * std).view_as(x)
-        return logits, reconstruction
+        kldiv_loss = 0.5 * (var + mu**2 - 1 - logvar).mean()
+        decoder_loss = F.mse_loss(reconstruction, x)
+        vae_loss = kldiv_loss + decoder_loss
+
+        return logits, vae_loss
 
     def __call__(self, x):
         return self.forward(x)
