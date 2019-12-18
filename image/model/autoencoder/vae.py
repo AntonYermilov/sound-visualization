@@ -32,7 +32,8 @@ class VAE(nn.Module):
             nn.ReLU(),
             nn.Linear(self.hidden_size, self.hidden_size),
             nn.ReLU(),
-            nn.Linear(self.hidden_size, self.num_class)
+            nn.Linear(self.hidden_size, self.num_class),
+            nn.Softmax()
         )
 
     def encode(self, x):
@@ -58,16 +59,15 @@ class VAE(nn.Module):
         z = mu + torch.sqrt(var) * torch.randn(var.shape).to(self.device)
 
         logits = self.classifier(z)
+
+        x = x.view(-1, 784)
         reconstruction = self.decode(z).view_as(x)
 
-        kldiv_loss = 0.5 * (var + mu**2 - 1 - logvar).mean()
-        decoder_loss = F.mse_loss(reconstruction, x)
+        kldiv_loss = 0.5 * (var + mu**2 - 1 - logvar).sum()
+        decoder_loss = F.binary_cross_entropy(reconstruction, x, reduction='sum')
         vae_loss = kldiv_loss + decoder_loss
 
         return logits, vae_loss
-
-    def __call__(self, x):
-        return self.forward(x)
 
     def set_train(self):
         self.state = EncoderState.TRAIN
